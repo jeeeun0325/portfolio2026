@@ -4,6 +4,68 @@
   const config=window.PORTFOLIO_CONTENT||{};
   const safeURL=value=>{if(!value||typeof value!=='string')return null;try{const u=new URL(value,document.baseURI);return ['http:','https:','file:'].includes(u.protocol)?u.href:null;}catch{return null;}};
   // All text replacements are plain text, never injected HTML.
+  const projectData=config.projects||[];
+  const selectedProjects=projectData.filter(project=>project.group==='selected');
+  const moreProjects=projectData.filter(project=>project.group==='more');
+  $('.more-heading>span').textContent=moreProjects.length+' PROJECTS';
+  const element=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text)node.textContent=text;return node;};
+  function projectImage(data){const img=element('img');img.src=data.image;img.alt=data.imageAlt;img.width=1440;img.height=900;img.loading='lazy';img.decoding='async';return img;}
+  const educationProjects=projectData.filter(project=>project.group==='education');
+  if(educationProjects.length){
+    const section=element('section','education-projects section'),heading=element('h2','','EDUCATION PROJECTS');
+    section.id='education-projects';heading.id='education-title';section.setAttribute('aria-labelledby',heading.id);section.append(heading);
+    educationProjects.forEach(data=>{
+      const article=element('article','education-project'),copy=element('div','education-copy'),title=element('h3','',data.title);
+      article.id='project-'+data.id;
+      copy.append(element('span','eyebrow',data.category),title);
+      if(data.visibility)copy.append(element('span','education-visibility',data.visibility));
+      if(data.description)copy.append(element('p','education-description',data.description));
+      const rows=[['담당 범위',data.role],['기여도',data.contribution],['사용 기술',data.tech],['주요 구현 포인트',data.highlights]];
+      const facts=element('dl','project-facts');
+      rows.forEach(([label,value])=>{
+        const values=(Array.isArray(value)?value:[value]).filter(item=>typeof item==='string'&&item.trim());
+        if(!values.length)return;
+        const row=element('div');row.append(element('dt','',label),element('dd','',values.join(' · ')));facts.append(row);
+      });
+      if(facts.childElementCount)copy.append(facts);
+      const links=element('div','education-links');
+      (data.links||[]).forEach(link=>{
+        const url=safeURL(link.url);if(!url)return;
+        const anchor=element('a','text-link',link.label+' ↗');anchor.href=url;anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.setAttribute('aria-label',data.title+' '+link.label+' (새 탭)');links.append(anchor);
+      });
+      if(links.childElementCount)copy.append(links);
+      if(data.linkNote)copy.append(element('p','education-note',data.linkNote));
+      article.append(copy);
+      if(data.image&&safeURL(data.image)){article.classList.add('has-image');article.append(projectImage(data));}
+      section.append(article);
+    });
+    $('#more-projects').before(section);
+  }
+  selectedProjects.forEach((data,index)=>{
+    const card=element('article','project'),link=element('a','project-visual'),caption=element('div','project-caption'),copy=element('div');
+    card.dataset.project=data.id;link.href='#project-'+data.id;link.setAttribute('aria-controls','featured');
+    copy.append(element('span','',data.category),element('h3','',data.title));
+    const arrow=element('span','circle','↗');arrow.setAttribute('aria-hidden','true');
+    caption.append(copy,arrow);link.append(projectImage(data),element('span','project-number',String(index+1).padStart(2,'0')),caption);card.append(link);$('.works-track').append(card);
+  });
+  moreProjects.forEach((data,index)=>{
+    const card=element('a','more-card'),copy=element('div','more-card-copy'),arrow=element('span','more-arrow','↗');
+    card.href=safeURL(data.url);card.target='_blank';card.rel='noopener noreferrer';card.setAttribute('aria-label',data.title+' · '+data.category+' (새 탭)');card.hidden=index>=6;
+    arrow.setAttribute('aria-hidden','true');copy.append(element('h3','',data.title),element('span','',data.category),arrow);
+    if(data.image&&safeURL(data.image))card.append(projectImage(data));
+    else {const cover=element('div','more-text-cover',data.title);cover.setAttribute('aria-hidden','true');card.append(cover);}
+    card.append(copy);$('#more-grid').append(card);
+  });
+  const moreToggle=$('.more-toggle');
+  moreToggle.hidden=moreProjects.length<=6;
+  moreToggle.addEventListener('click',()=>{
+    const expanded=moreToggle.getAttribute('aria-expanded')!=='true';
+    $$('.more-card').forEach((card,index)=>{card.hidden=!expanded&&index>=6;if(expanded&&index>=6&&!matchMedia('(prefers-reduced-motion: reduce)').matches)card.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],{duration:240,delay:(index-6)*40,fill:'backwards'});});
+    moreToggle.setAttribute('aria-expanded',String(expanded));moreToggle.textContent=expanded?'프로젝트 접기 −':'프로젝트 더 보기 ＋';
+    $('#more-status').textContent=expanded?`추가 프로젝트 ${moreProjects.length-6}개가 펼쳐졌습니다. 전체 ${moreProjects.length}개 프로젝트 표시 중.`:'6개 프로젝트 표시 중.';
+    if(expanded)$$('.more-card')[6]?.focus({preventScroll:true});
+    window.ScrollTrigger?.refresh();
+  });
   const cards=$$('[data-project]');
   let worksSwiper=null;
   const motionPreference=matchMedia('(prefers-reduced-motion: reduce)');
@@ -54,17 +116,6 @@
   const ready=element=>new Promise((resolve,reject)=>{element.onload=resolve;element.onerror=reject;});
   Promise.all([ready(swiperCSS),ready(swiperJS)]).then(initWorksSwiper).catch(()=>{/* The complete static grid remains usable. */});
   document.head.append(swiperCSS,swiperJS);
-  cards.forEach(card=>{
-    const data=config.projects?.[card.dataset.project]; if(!data)return;
-    const visual=$('.project-visual',card), title=$('h3',card), img=$('img',card);
-    if(data.title)title.textContent=data.title;
-    if(data.category)$('.project-caption div > span',card).textContent=data.category;
-    if(data.imageAlt)img.alt=data.imageAlt;
-    // Cards always select the shared detail panel; external URLs belong there.
-    if(safeURL(data.image)){
-      const probe=new Image(); probe.onload=()=>{img.src=probe.src;img.alt=data.imageAlt||`${data.title||title.textContent} 프로젝트 화면`;img.className='';window.ScrollTrigger?.refresh();};probe.src=safeURL(data.image);
-    }
-  });
   const links=[];
   const contactLinks=$('#contact-links');
   if(config.contactDraft){
@@ -116,38 +167,33 @@
   detailTitle.tabIndex=-1;
   const facts=document.createElement('dl');facts.className='project-facts';
   $('.featured-description').insertBefore(facts,$('#feature-link'));
-  const unavailable=document.createElement('p');unavailable.className='project-site-pending';
-  unavailable.textContent='실제 사이트 링크 업데이트 예정';
-  $('#feature-link').after(unavailable);
-  cards.forEach(card=>{
-    const link=$('.project-visual',card);
-    link.href=`#project-${card.dataset.project}`;
-    link.setAttribute('aria-controls','featured');
-    // Retain native fallback content in the source for visitors without JS.
-    $('details',card).hidden=true;
-  });
   const menuDetail=$('#menu-panel a[href="#featured"]');
   if(menuDetail)menuDetail.textContent='Project Detail';
   let featureIndex=0;
   function showFeature(index,announce=true){
     featureIndex=(index+cards.length)%cards.length;
-    const card=cards[featureIndex],data=config.projects?.[card.dataset.project]||{},img=$('img',card);
+    const card=cards[featureIndex],data=selectedProjects[featureIndex]||{},img=$('img',card);
     const number=String(featureIndex+1).padStart(2,'0');
-    const content={'#feature-number':number,'#featured-title':data.featuredTitle||$('h3',card).textContent,'#feature-category':`${data.category||''}\n${data.status??'CONCEPT PROJECT'}`,'#feature-description':data.description||'프로젝트 정보 업데이트 예정','#feature-count':`${number} / ${String(cards.length).padStart(2,'0')}`,'#feature-project-name':$('h3',card).textContent};
+    const content={'#feature-number':number,'#featured-title':data.featuredTitle||$('h3',card).textContent,'#feature-category':data.category||'','#feature-count':`${number} / ${String(cards.length).padStart(2,'0')}`,'#feature-project-name':$('h3',card).textContent};
     Object.entries(content).forEach(([s,text])=>{$(s).textContent=text;$(s).style.whiteSpace='pre-line';});
-    $('#feature-image').src=safeURL(data.image)||img.src;$('#feature-image').alt=data.imageAlt||img.alt;
+    $('#feature-image').src=safeURL(data.image)?data.image:img.getAttribute('src');$('#feature-image').alt=data.imageAlt||img.alt;
     cards.forEach((item,i)=>{item.classList.toggle('is-selected',i===featureIndex);const a=$('.project-visual',item);if(i===featureIndex)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current');});
     worksSwiper?.slideTo(featureIndex,motionPreference.matches?0:550);
-    const rows=[['담당 범위',data.role||'실제 담당 업무 입력 예정'],['기여도',data.contribution||'실제 기여도 입력 예정'],['사용 기술',data.tech||'사용 기술 입력 예정'],['주요 구현 포인트',data.highlights||'구현 과정과 개선 결과 입력 예정']];
-    const visibleRows=data.compact?rows.filter((row,i)=>i<2||(i===2?data.tech:data.highlights)):rows;
-    facts.replaceChildren(...visibleRows.map(([label,value])=>{const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=Array.isArray(value)?value.join(' · '):value;row.append(dt,dd);return row;}));
+    const rows=[['담당 범위',data.role],['기여도',data.contribution],['사용 기술',data.tech],['주요 구현 포인트',data.highlights]];
+    const visibleRows=rows.filter(([,value])=>Array.isArray(value)?value.some(item=>item.trim()):typeof value==='string'&&value.trim());
+    facts.hidden=!visibleRows.length;
+    facts.replaceChildren(...visibleRows.map(([label,value])=>{
+      const row=element('div'),dt=element('dt','',label),dd=element('dd');
+      if(label==='주요 구현 포인트'&&Array.isArray(value)){const list=element('ul');value.filter(item=>item.trim()).slice(0,3).forEach(item=>list.append(element('li','',item)));dd.append(list);}else dd.textContent=Array.isArray(value)?value.filter(Boolean).join(' · '):value;
+      row.append(dt,dd);return row;
+    }));
     const site=safeURL(data.url),siteLink=$('#feature-link');
-    siteLink.hidden=!site;unavailable.hidden=!!site;siteLink.textContent='사이트 보기 ↗';
+    siteLink.hidden=!site;siteLink.textContent='사이트 바로가기 ↗';
     if(site){siteLink.href=site;siteLink.target='_blank';siteLink.rel='noopener noreferrer';siteLink.setAttribute('aria-label',`${$('h3',card).textContent} 사이트 보기 (새 창)`);}else siteLink.removeAttribute('href');
     if(announce){
       $('#feature-status').textContent=`${featureIndex+1}번째 프로젝트: ${data.featuredTitle||$('h3',card).textContent}`;
       if(!motionPreference.matches){
-        [detailTitle,$('#feature-description'),$('#feature-image')].forEach(element=>{
+        [detailTitle,$('#feature-image')].forEach(element=>{
           element.getAnimations().forEach(animation=>animation.cancel());
           element.animate([{opacity:.25,translate:'0 14px'},{opacity:1,translate:'0 0'}],{duration:550,easing:'cubic-bezier(.2,.7,.2,1)'});
         });
@@ -165,7 +211,7 @@
   cards.forEach((card,i)=>$('.project-visual',card).addEventListener('click',e=>{if(worksSwiper&&!worksSwiper.allowClick){e.preventDefault();return;}if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0)return;e.preventDefault();goToDetail(i);}));
   const syncHash=()=>{
     const hash=location.hash.slice(1);
-    const i=cards.findIndex(card=>hash===`project-${card.dataset.project}`||hash===$('details',card).id);
+    const i=cards.findIndex(card=>hash===`project-${card.dataset.project}`);
     if(i>=0)goToDetail(i,false);
   };
   showFeature(0,false);syncHash();window.addEventListener('hashchange',syncHash);
@@ -212,8 +258,8 @@
     gsap.fromTo('.discipline-track',{xPercent:4},{xPercent:-10,ease:'none',scrollTrigger:{trigger:'.discipline-band',start:'top bottom',end:'bottom top',scrub:true}});
     reveal('.about-info','.about-info',{x:30,y:0});
     reveal('.works-heading > *','.works-heading',{y:35,stagger:.15});
-    gsap.from('.project-visual',{clipPath:'inset(0 0 100% 0)',y:30,duration:1.1,stagger:.09,ease:'power3.out',scrollTrigger:{trigger:'.works',start:'top 85%',once:true}});
-    gsap.from('.featured-image',{clipPath:'inset(0 100% 0 0)',duration:1.25,ease:'power3.inOut',scrollTrigger:{trigger:'.featured',start:'top 88%',once:true}});
+    gsap.from('.project-visual',{opacity:0,y:12,duration:.4,stagger:.04,ease:'power3.out',scrollTrigger:{trigger:'.works',start:'top 85%',once:true}});
+    gsap.from('.featured-image',{opacity:0,y:12,duration:.4,ease:'power3.out',scrollTrigger:{trigger:'.featured',start:'top 88%',once:true}});
     reveal('.featured-copy > .eyebrow,.featured-title,.featured-description','.featured',{y:30,stagger:.13});
     reveal('.feature-summary,.feature-controls','.featured-aside',{y:25});
     reveal('.skills > div','.skills',{y:45,stagger:.12});
